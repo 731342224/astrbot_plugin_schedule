@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能课表与日程管家</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部操作栏 -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand-title">
+          <span class="brand-icon">📅</span>
+          <div>
+            <div class="title-and-profile-row">
+              <h1 id="semesterTitle">加载学期中...</h1>
+              <div class="profile-switcher-bar">
+                <select id="profileSelect" class="form-select profile-select" title="切换当前使用的课表"></select>
+                <button type="button" class="btn btn-outline btn-xs" id="openProfilesModalBtn" title="新建、重命名或删除多份课表">
+                  🗂️ 多课表管理
+                </button>
+              </div>
+            </div>
+            <div class="badge-row">
+              <span class="week-badge" id="currentWeekBadge">计算教学周...</span>
+              <span class="course-count-badge" id="courseCountBadge">0 门课程</span>
+              <label class="reminder-quick-toggle" title="关闭后机器人不会主动提醒，仅在你询问时回答是什么课">
+                <input type="checkbox" id="topReminderToggle" />
+                <span id="topReminderLabel">🔔 课前提醒：关</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <div class="week-selector-group">
+          <button type="button" class="btn btn-icon" id="prevWeekBtn" title="上一周">◀</button>
+          <select id="weekSelect" class="form-select" aria-label="切换查看教学周"></select>
+          <button type="button" class="btn btn-icon" id="nextWeekBtn" title="下一周">▶</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="jumpCurrentWeekBtn" title="回到当前教学周">本周</button>
+        </div>
+
+        <div class="action-buttons">
+          <button type="button" class="btn btn-secondary" id="openEduModalBtn">
+            🎓 教务处登录导入
+          </button>
+          <button type="button" class="btn btn-outline" id="openImportModalBtn">
+            📥 文件导入
+          </button>
+          <button type="button" class="btn btn-outline" id="openExportModalBtn">
+            📤 导出课表
+          </button>
+          <button type="button" class="btn btn-primary" id="openAddCourseModalBtn">
+            ＋ 添加课程
+          </button>
+          <button type="button" class="btn btn-outline" id="openConfigModalBtn">
+            ⚙️ 学期与作息设置
+          </button>
+          <button type="button" class="btn btn-danger" id="clearAllCoursesBtn" title="一键删除全部固定课程">
+            🗑️ 清空课表
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 隐藏的原生 HTML5 文件选择器 -->
+    <input type="file" id="hiddenFileInput" accept=".ics,.json,.html,.htm,.txt" style="display: none;" />
+
+    <!-- 主视图 Tab 切换栏 -->
+    <div class="tabs-bar">
+      <div class="tabs-nav">
+        <button type="button" class="tab-btn active" data-tab="tab-grid">
+          🗓️ 周课表网格
+        </button>
+        <button type="button" class="tab-btn" data-tab="tab-courses">
+          📚 全部课程管理 <span class="tab-counter" id="coursesCounter">0</span>
+        </button>
+        <button type="button" class="tab-btn" data-tab="tab-events">
+          📌 临时日程与调课 <span class="tab-counter" id="eventsCounter">0</span>
+        </button>
+      </div>
+
+      <!-- 网格视图附加开关：非本周课程显示模式 -->
+      <div class="grid-filter-options" id="gridFilterBar">
+        <label class="toggle-label">
+          <input type="checkbox" id="showInactiveCoursesToggle" checked />
+          <span>半透明显示非本周课程</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 主视图 Tab 1：周课表网格 -->
+    <main id="tab-grid" class="tab-panel active">
+      <div class="schedule-table-wrapper">
+        <table class="schedule-grid" id="scheduleGridTable">
+          <thead>
+            <tr id="scheduleGridHeader">
+              <th class="period-col-header">节次 / 时间</th>
+              <th data-day="1">周一<span class="th-date" id="thDate1"></span></th>
+              <th data-day="2">周二<span class="th-date" id="thDate2"></span></th>
+              <th data-day="3">周三<span class="th-date" id="thDate3"></span></th>
+              <th data-day="4">周四<span class="th-date" id="thDate4"></span></th>
+              <th data-day="5">周五<span class="th-date" id="thDate5"></span></th>
+              <th data-day="6">周六<span class="th-date" id="thDate6"></span></th>
+              <th data-day="7">周日<span class="th-date" id="thDate7"></span></th>
+            </tr>
+          </thead>
+          <tbody id="scheduleGridBody">
+            <!-- JS 动态渲染 7列 × 节次行网格 -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- 主视图 Tab 2：全部课程管理（查看所有课程、快速添加、编辑与删除） -->
+    <section id="tab-courses" class="tab-panel">
+      <div class="events-layout">
+        <!-- 顶部快速添加课程表单 -->
+        <div class="card">
+          <div class="card-header">
+            <h2>＋ 快速添加固定课程</h2>
+            <button type="button" class="btn btn-outline btn-sm" id="openFullCourseModalFromTabBtn">
+              🎛️ 打开高级选周弹窗添加
+            </button>
+          </div>
+          <form id="quickCourseForm" class="event-form-grid">
+            <div class="form-group">
+              <label for="qcName">课程名称 *</label>
+              <input type="text" id="qcName" class="form-input" placeholder="如：高等数学（上）" required />
+            </div>
+            <div class="form-group">
+              <label for="qcTeacher">任课教师</label>
+              <input type="text" id="qcTeacher" class="form-input" placeholder="如：张教授" />
+            </div>
+            <div class="form-group">
+              <label for="qcLocation">上课教室 / 地点</label>
+              <input type="text" id="qcLocation" class="form-input" placeholder="如：致远楼 302" />
+            </div>
+            <div class="form-group">
+              <label for="qcDay">星期几 *</label>
+              <select id="qcDay" class="form-select">
+                <option value="1">周一</option>
+                <option value="2">周二</option>
+                <option value="3">周三</option>
+                <option value="4">周四</option>
+                <option value="5">周五</option>
+                <option value="6">周六</option>
+                <option value="7">周日</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="qcStartPeriod">起始节次 *</label>
+              <select id="qcStartPeriod" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="qcEndPeriod">结束节次 *</label>
+              <select id="qcEndPeriod" class="form-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="qcWeeksExpr">上课周次 *</label>
+              <input
+                type="text"
+                id="qcWeeksExpr"
+                class="form-input"
+                value="1-16"
+                placeholder="如：1-16 或 1-15单 或 1-8,10-16"
+                required
+              />
+            </div>
+            <div class="form-group form-actions-inline">
+              <button type="submit" class="btn btn-primary">＋ 直接添加课程</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 全部固定课程总表 -->
+        <div class="card">
+          <div class="card-header events-list-header">
+            <h2>📚 全部固定课程列表</h2>
+            <div class="events-toolbar">
+              <input
+                type="search"
+                id="courseSearchInput"
+                class="form-input"
+                placeholder="🔍 搜索课程名 / 教师 / 教室..."
+                style="width: 210px;"
+              />
+              <select id="courseDayFilterSelect" class="form-select" style="width: 115px;">
+                <option value="0">全部星期</option>
+                <option value="1">周一</option>
+                <option value="2">周二</option>
+                <option value="3">周三</option>
+                <option value="4">周四</option>
+                <option value="5">周五</option>
+                <option value="6">周六</option>
+                <option value="7">周日</option>
+              </select>
+              <button type="button" class="btn btn-primary btn-sm" id="addCourseInListBtn">
+                ＋ 新增课程
+              </button>
+              <button type="button" class="btn btn-danger btn-sm" id="clearAllCoursesInListBtn">
+                🗑️ 清空全部
+              </button>
+            </div>
+          </div>
+
+          <div id="allCoursesListContainer" class="events-list">
+            <!-- JS 动态渲染所有课程行 -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 主视图 Tab 3：临时日程与调课 -->
+    <section id="tab-events" class="tab-panel">
+      <div class="events-layout">
+        <!-- 顶部快速新增临时日程 / 停课标记表单 -->
+        <div class="card event-quick-form-card">
+          <div class="card-header">
+            <h2>＋ 快速新增临时日程 / 标记停课</h2>
+          </div>
+          <form id="quickEventForm" class="event-form-grid">
+            <div class="form-group">
+              <label for="evtDate">生效日期 *</label>
+              <input type="date" id="evtDate" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label for="evtType">记录类型 *</label>
+              <select id="evtType" class="form-select">
+                <option value="custom_event">📌 临时日程 / 补课安排</option>
+                <option value="cancel_course">🚫 固定课程停课标记</option>
+              </select>
+            </div>
+            <div class="form-group" id="evtTargetCourseGroup" style="display: none;">
+              <label for="evtTargetCourse">选择停课课程</label>
+              <select id="evtTargetCourse" class="form-select">
+                <option value="">-- 手动输入或选择已有课程 --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="evtTitle" id="evtTitleLabel">日程标题 / 课程名称 *</label>
+              <input type="text" id="evtTitle" class="form-input" placeholder="如：班级团建会议 / 高等数学" required />
+            </div>
+            <div class="form-group">
+              <label for="evtStartTime">开始时间</label>
+              <input type="time" id="evtStartTime" class="form-input" value="16:30" />
+            </div>
+            <div class="form-group">
+              <label for="evtEndTime">结束时间</label>
+              <input type="time" id="evtEndTime" class="form-input" value="17:30" />
+            </div>
+            <div class="form-group">
+              <label for="evtLocation">地点 / 教室</label>
+              <input type="text" id="evtLocation" class="form-input" placeholder="如：活动中心 201" />
+            </div>
+            <div class="form-group">
+              <label for="evtNote">备注说明</label>
+              <input type="text" id="evtNote" class="form-input" placeholder="如：班长通知" />
+            </div>
+            <div class="form-group form-actions-inline">
+              <button type="submit" class="btn btn-primary">保存记录</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 日程与调课记录列表 -->
+        <div class="card events-list-card">
+          <div class="card-header events-list-header">
+            <h2>全部调课与临时日程列表</h2>
+            <div class="events-toolbar">
+              <button type="button" class="btn btn-outline btn-sm" id="toggleEventSortBtn">
+                ⇅ 排序：按日期倒序
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" id="refreshEventsBtn">
+                ↻ 刷新
+              </button>
+            </div>
+          </div>
+          <div id="eventsListContainer" class="events-list">
+            <!-- JS 动态渲染 -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 弹窗 1：新增 / 编辑固定课程 -->
+  <div class="modal-backdrop" id="courseModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="courseModalTitle">添加固定课程</h3>
+        <button type="button" class="modal-close" data-close="courseModal">✕</button>
+      </div>
+      <form id="courseForm" class="modal-body">
+        <input type="hidden" id="courseIdInput" />
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="courseNameInput">课程名称 *</label>
+            <input type="text" id="courseNameInput" class="form-input" placeholder="如：高等数学（上）" required />
+          </div>
+          <div class="form-group">
+            <label for="courseTeacherInput">任课教师</label>
+            <input type="text" id="courseTeacherInput" class="form-input" placeholder="如：张教授" />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="courseLocationInput">上课教室 / 地点</label>
+            <input type="text" id="courseLocationInput" class="form-input" placeholder="如：致远楼 302" />
+          </div>
+          <div class="form-group">
+            <label for="courseColorInput">卡片主题色</label>
+            <div class="color-picker-row">
+              <input type="color" id="courseColorInput" class="form-color" value="#4F46E5" />
+              <div class="color-presets" id="colorPresets"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row-3">
+          <div class="form-group">
+            <label for="courseDaySelect">星期几 *</label>
+            <select id="courseDaySelect" class="form-select">
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="7">周日</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="courseStartPeriodSelect">起始节次 *</label>
+            <select id="courseStartPeriodSelect" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="courseEndPeriodSelect">结束节次 *</label>
+            <select id="courseEndPeriodSelect" class="form-select"></select>
+          </div>
+        </div>
+
+        <!-- 1~20 周次可视化复选胶囊按钮 -->
+        <div class="form-group">
+          <div class="weeks-header-row">
+            <label>上课教学周次 *</label>
+            <div class="weeks-quick-btns">
+              <button type="button" class="btn btn-xs btn-outline" id="weeksAllBtn">全选</button>
+              <button type="button" class="btn btn-xs btn-outline" id="weeksOddBtn">单周</button>
+              <button type="button" class="btn btn-xs btn-outline" id="weeksEvenBtn">双周</button>
+              <button type="button" class="btn btn-xs btn-ghost" id="weeksClearBtn">清空</button>
+            </div>
+          </div>
+          <div class="week-pills-container" id="weekPillsContainer">
+            <!-- JS 动态渲染 1~N 周胶囊按钮 -->
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger" id="deleteCourseBtn" style="display: none; margin-right: auto;">
+            🗑️ 删除课程
+          </button>
+          <button type="button" class="btn btn-ghost" data-close="courseModal">取消</button>
+          <button type="submit" class="btn btn-primary">💾 保存课程</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 弹窗 2：导入课表 (.ics / .json) -->
+  <div class="modal-backdrop" id="importModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📥 一键导入课表 (.ics / .json)</h3>
+        <button type="button" class="modal-close" data-close="importModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">
+          支持导入 <strong>.ics</strong> 日历文件（兼容 WakeUp课程表、小爱课程表、教务处导出，自动展开 RRULE 重复规则并反推周次与节次）或标准 <strong>.json</strong> 课表文件。
+        </p>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="importModeSelect">导入策略</label>
+            <select id="importModeSelect" class="form-select">
+              <option value="overwrite">覆盖现有课表 (overwrite)</option>
+              <option value="merge">与现有课表合并 (merge)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="importFileTypeSelect">文件格式</label>
+            <select id="importFileTypeSelect" class="form-select">
+              <option value="ics">iCalendar (.ics)</option>
+              <option value="json">标准 JSON (.json)</option>
+              <option value="html">教务处课表网页 (.html / .htm)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="file-dropzone" id="fileDropzone">
+          <div class="dropzone-content">
+            <span class="dropzone-icon">📄</span>
+            <p id="selectedFileName">点击选择本地 .ics 或 .json 文件，或拖拽文件至此处</p>
+            <button type="button" class="btn btn-secondary btn-sm" id="triggerFileSelectBtn">选择本地文件</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="importContentTextarea">文件文本内容预览（亦可直接粘贴 .ics 或 .json 内容）</label>
+          <textarea id="importContentTextarea" class="form-textarea" rows="6" placeholder="选择文件后将自动读取内容，或直接粘贴 ICS / JSON 文本..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close="importModal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmImportBtn">🚀 开始解析并导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗 3：学期与作息时间设置 -->
+  <div class="modal-backdrop" id="configModal" style="display: none;">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>⚙️ 学期与作息时间设置</h3>
+        <button type="button" class="modal-close" data-close="configModal">✕</button>
+      </div>
+      <form id="configForm" class="modal-body">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label for="cfgSemesterName">学期名称 *</label>
+            <input type="text" id="cfgSemesterName" class="form-input" placeholder="如：2026-2027第一学期" required />
+          </div>
+          <div class="form-group">
+            <label for="cfgStartDate">第一周周一日期 *</label>
+            <input type="date" id="cfgStartDate" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label for="cfgTotalWeeks">学期总周数 *</label>
+            <input type="number" id="cfgTotalWeeks" class="form-input" min="1" max="40" value="20" required />
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="cfgEnableReminder">是否开启课前主动提醒</label>
+            <label class="toggle-label" style="margin-top: 6px;">
+              <input type="checkbox" id="cfgEnableReminder" />
+              <span>开启主动提醒（关闭则仅在询问机器人时回答课表）</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="cfgRemindMinutes">提醒提前分钟数</label>
+            <input type="number" id="cfgRemindMinutes" class="form-input" min="1" max="180" value="15" />
+          </div>
+        </div>
+
+        <div class="periods-config-section">
+          <div class="periods-header-row">
+            <label>每日节次与起止时间映射表</label>
+            <div class="periods-actions">
+              <button type="button" class="btn btn-xs btn-outline" id="addPeriodRowBtn">＋ 新增一节</button>
+              <button type="button" class="btn btn-xs btn-ghost" id="removePeriodRowBtn">－ 移除末节</button>
+            </div>
+          </div>
+          <div class="periods-list-grid" id="periodsConfigList">
+            <!-- JS 动态渲染各节次起止时间输入 -->
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-ghost" data-close="configModal">取消</button>
+          <button type="submit" class="btn btn-primary">💾 保存学期与作息设置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 弹窗 4：教务处登录 / 内置网页与免验证码一键导入课表 -->
+  <div class="modal-backdrop" id="eduModal" style="display: none;">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>🎓 教务处自动登录与课表一键导入</h3>
+        <button type="button" class="modal-close" data-close="eduModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- 顶部模式子 Tab -->
+        <div class="edu-subtabs">
+          <button type="button" class="edu-subtab-btn active" data-edutab="edu-tab-login">
+            🔑 账号密码 + 验证码登录抓取
+          </button>
+          <button type="button" class="edu-subtab-btn" data-edutab="edu-tab-webview">
+            🌐 内置网页 / Cookie / HTML 一键导入
+          </button>
+        </div>
+
+        <!-- 子视图 1：账号密码 + 图形验证码直连抓取 -->
+        <div id="edu-tab-login" class="edu-subpanel active">
+          <p class="modal-hint">
+            支持 <strong>新版正方教务 (/jwglxt)</strong>、<strong>强智科技教务 (/jsxsd)</strong>、<strong>旧版正方</strong>、<strong>金智/树维/URP</strong> 等高校教务系统。先填写学校教务处网址并点击「连接并获取验证码」，再输入学号密码一键导入。
+          </p>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="eduSysType">教务系统类型</label>
+              <select id="eduSysType" class="form-select">
+                <option value="auto">🤖 自动识别教务系统 (推荐)</option>
+                <option value="zfnew">新版正方教务系统 (/jwglxt)</option>
+                <option value="qz">强智科技教务系统 (/jsxsd)</option>
+                <option value="zfold">旧版正方教务系统 (default2.aspx)</option>
+                <option value="generic">金智 / 树维 / URP / 其他通用教务</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="eduImportMode">导入策略</label>
+              <select id="eduImportMode" class="form-select">
+                <option value="overwrite">覆盖现有课表 (overwrite)</option>
+                <option value="merge">与现有课表合并 (merge)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="eduLoginUrl">学校教务处登录网址 URL *</label>
+            <div class="input-with-btn">
+              <input
+                type="url"
+                id="eduLoginUrl"
+                class="form-input"
+                placeholder="例如：https://jwxt.xxx.edu.cn/jwglxt/xtgl/login_slogin.html"
+              />
+              <button type="button" class="btn btn-secondary" id="eduConnectBtn">
+                🔗 连接并获取验证码
+              </button>
+            </div>
+            <span class="field-status-hint" id="eduSessionStatus">尚未连接教务处会话</span>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="eduUsername">学号 / 教务账号 *</label>
+              <input type="text" id="eduUsername" class="form-input" placeholder="请输入学号" />
+            </div>
+            <div class="form-group">
+              <label for="eduPassword">教务处密码 *</label>
+              <input type="password" id="eduPassword" class="form-input" placeholder="请输入密码（仅用于本次抓取）" />
+            </div>
+          </div>
+
+          <!-- 图形验证码区域（当检测到验证码或手动开启时显示） -->
+          <div class="form-row-2" id="eduCaptchaRow">
+            <div class="form-group">
+              <label for="eduCaptchaInput">图形验证码（若教务处无验证码可留空）</label>
+              <input type="text" id="eduCaptchaInput" class="form-input" placeholder="请输入右侧验证码" />
+            </div>
+            <div class="form-group">
+              <label>验证码图片（点击图片可刷新）</label>
+              <div class="captcha-box">
+                <img id="eduCaptchaImg" alt="点击上方连接获取验证码" style="display: none;" title="点击刷新验证码" />
+                <span id="eduCaptchaPlaceholder" class="captcha-placeholder">点击「连接并获取验证码」后加载</span>
+                <button type="button" class="btn btn-xs btn-ghost" id="eduRefreshCaptchaBtn" style="display: none;">
+                  ↻ 换一张
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="eduAcademicYear">学年（起始年份）</label>
+              <input type="number" id="eduAcademicYear" class="form-input" value="2026" min="2020" max="2035" />
+            </div>
+            <div class="form-group">
+              <label for="eduSemesterTerm">学期</label>
+              <select id="eduSemesterTerm" class="form-select">
+                <option value="1">第一学期（秋/上学期）</option>
+                <option value="2">第二学期（春/下学期）</option>
+                <option value="3">第三学期（暑期/短学期）</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="eduCustomScheduleUrl">自定义课表接口地址（选填）</label>
+              <input type="text" id="eduCustomScheduleUrl" class="form-input" placeholder="默认自动推导，特殊系统可填" />
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin: 6px -18px -16px;">
+            <button type="button" class="btn btn-ghost" data-close="eduModal">取消</button>
+            <button type="button" class="btn btn-primary" id="eduLoginImportBtn">
+              🚀 登录教务处并自动导入课表
+            </button>
+          </div>
+        </div>
+
+        <!-- 子视图 2：内置网页 / Cookie / 网页 HTML / WakeUp 通用一键导入 -->
+        <div id="edu-tab-webview" class="edu-subpanel" style="display: none;">
+          <p class="modal-hint">
+            <strong>适用所有高校（支持统一身份认证/微信扫码/复杂滑块）：</strong><br />
+            方式 A：在下方输入教务处网址打开<strong>内置网页预览</strong>，或点击「在新窗口打开教务处」登录后进入个人课表页；<br />
+            方式 B：在课表页面按 <code>Ctrl+S</code>（或右键“查看框架源代码”全选复制）把课表网页 HTML / 正方 JSON / WakeUp文本粘贴到下方，即可 100% 免验证码一键解析导入！
+          </p>
+
+          <div class="form-group">
+            <label for="eduWebviewUrl">教务处网址 / 个人课表页面 URL</label>
+            <div class="input-with-btn">
+              <input
+                type="url"
+                id="eduWebviewUrl"
+                class="form-input"
+                placeholder="输入教务处网址，如 https://jwxt.xxx.edu.cn"
+              />
+              <button type="button" class="btn btn-outline btn-sm" id="eduLoadIframeBtn">
+                🖥️ 内置网页打开
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="eduOpenExternalBtn">
+                ↗ 新窗口打开登录
+              </button>
+            </div>
+          </div>
+
+          <!-- 内置网页容器（可选展开） -->
+          <div id="eduIframeContainer" class="edu-iframe-wrapper" style="display: none;">
+            <div class="edu-iframe-toolbar">
+              <span>🌐 内置教务网页视图（若学校教务处禁止 iframe 嵌套，请点击右上角「新窗口打开登录」或填写 Cookie 抓取）</span>
+              <button type="button" class="btn btn-xs btn-ghost" id="eduCloseIframeBtn">收起网页</button>
+            </div>
+            <iframe id="eduEmbeddedIframe" class="edu-iframe" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="eduCookieInput">已登录 Cookie（选填，配合上方课表 URL 免密直接抓取）</label>
+              <input
+                type="text"
+                id="eduCookieInput"
+                class="form-input"
+                placeholder="如：JSESSIONID=xxx; route=xxx（在浏览器按 F12 输入 document.cookie 获取）"
+              />
+            </div>
+            <div class="form-group">
+              <label for="eduHtmlImportMode">导入策略</label>
+              <select id="eduHtmlImportMode" class="form-select">
+                <option value="overwrite">覆盖现有课表 (overwrite)</option>
+                <option value="merge">与现有课表合并 (merge)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="weeks-header-row">
+              <label for="eduRawHtmlTextarea">或者：直接粘贴课表网页 HTML 源码 / 正方 kbList JSON / WakeUp导出文本</label>
+              <button type="button" class="btn btn-xs btn-outline" id="eduPreviewParseBtn">
+                🔍 预解析测试
+              </button>
+            </div>
+            <textarea
+              id="eduRawHtmlTextarea"
+              class="form-textarea"
+              rows="5"
+              placeholder="在教务处打开你的课表页面 -> 右键「查看页面/框架源代码」全选复制粘贴到这里，或者填写上方课表 URL + Cookie 直接抓取..."
+            ></textarea>
+            <div id="eduParsePreviewResult" class="parse-preview-box" style="display: none;"></div>
+          </div>
+
+          <div class="modal-footer" style="margin: 6px -18px -16px;">
+            <button type="button" class="btn btn-ghost" data-close="eduModal">取消</button>
+            <button type="button" class="btn btn-primary" id="eduWebviewImportBtn">
+              📥 一键解析并导入课表
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗 5：多份课表档案管理（新建、切换、重命名、复制、删除） -->
+  <div class="modal-backdrop" id="profilesModal" style="display: none;">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>🗂️ 多份课表管理（支持多学期 / 多人课表切换）</h3>
+        <button type="button" class="modal-close" data-close="profilesModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">
+          你可以创建并保存多份独立的课表（例如：<strong>大二上学期</strong>、<strong>大二下学期</strong>、<strong>室友课表</strong>、<strong>考研复习时间表</strong>）。每份课表拥有独立的学期作息、固定课程和临时日程。在顶部下拉框或聊天中对 AI 说<em>“切换到XXX课表”</em>即可随时切换！
+        </p>
+
+        <!-- 新建课表表单 -->
+        <form id="createProfileForm" class="card" style="padding: 12px 14px;">
+          <div class="card-header" style="margin-bottom: 10px; padding-bottom: 6px;">
+            <h2>＋ 新建一份课表</h2>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="newProfileName">课表名称 *</label>
+              <input type="text" id="newProfileName" class="form-input" placeholder="如：2027春季学期 / 室友课表" required />
+            </div>
+            <div class="form-group">
+              <label for="newProfileStartDate">第一周周一日期</label>
+              <input type="date" id="newProfileStartDate" class="form-input" value="2026-09-07" />
+            </div>
+            <div class="form-group">
+              <label for="newProfileTotalWeeks">学期总周数</label>
+              <input type="number" id="newProfileTotalWeeks" class="form-input" value="20" min="1" max="40" />
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 10px;">
+            <label class="toggle-label">
+              <input type="checkbox" id="newProfileCopyCurrent" />
+              <span>复制当前课表的全部固定课程到新课表</span>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">＋ 立即创建并切换</button>
+          </div>
+        </form>
+
+        <!-- 已保存的所有课表列表 -->
+        <div class="form-group">
+          <label>已保存的课表档案列表</label>
+          <div id="profilesListContainer" class="events-list">
+            <!-- JS 动态渲染 -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close="profilesModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 弹窗 6：导出课表 (.ics / .json) -->
+  <div class="modal-backdrop" id="exportModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📤 导出课表 (.ics 日历 / .json 备份)</h3>
+        <button type="button" class="modal-close" data-close="exportModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">
+          支持将课表导出为标准 <strong>.ics 日历文件</strong>（可直接导入到 iPhone/iPad 日历、华为/小米/OPPO 系统日历、Outlook、Google Calendar）或 <strong>.json 备份文件</strong>。
+        </p>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="exportFormatSelect">导出文件格式</label>
+            <select id="exportFormatSelect" class="form-select">
+              <option value="ics">📅 iCalendar 日历文件 (.ics) - 推荐导入手机日历</option>
+              <option value="json">📦 完整课表备份包 (.json 含作息+课程+临时日程)</option>
+              <option value="json_courses">📋 仅固定课程数组 (courses.json 标准格式)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="exportIncludeEvents">附加选项</label>
+            <label class="toggle-label" style="margin-top: 8px;">
+              <input type="checkbox" id="exportIncludeEvents" checked />
+              <span>包含临时日程并自动剔除已标记停课的节次</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="weeks-header-row">
+            <label for="exportPreviewTextarea">导出内容预览</label>
+            <div class="weeks-quick-btns">
+              <button type="button" class="btn btn-xs btn-outline" id="generateExportPreviewBtn">
+                🔄 刷新预览
+              </button>
+              <button type="button" class="btn btn-xs btn-secondary" id="copyExportContentBtn">
+                📋 复制内容到剪贴板
+              </button>
+            </div>
+          </div>
+          <textarea
+            id="exportPreviewTextarea"
+            class="form-textarea"
+            rows="7"
+            readonly
+            placeholder="点击下方「下载导出文件」或「刷新预览」生成内容..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-close="exportModal">关闭</button>
+        <button type="button" class="btn btn-primary" id="downloadExportFileBtn">
+          💾 下载导出文件
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全局轻提示 Toast -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 显式引入 AstrBot Bridge SDK，确保 module 脚本执行前 window.AstrBotPluginView 已就绪 -->
+  <script src="/api/plugin/page/bridge-sdk.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
