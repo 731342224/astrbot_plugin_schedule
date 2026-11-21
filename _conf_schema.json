@@ -1,0 +1,20 @@
+{
+  "auto_inject_today_context": {
+    "description": "自动向 AI 对话上下文注入今日课表与日程摘要",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，机器人始终知道你今天的教学周次、上什么课以及有什么临时日程，你随时问它都能直接回答。"
+  },
+  "enable_schedule_reminder": {
+    "description": "启用课程与日程主动提醒",
+    "type": "bool",
+    "default": false,
+    "hint": "是否需要课前/日程前主动提醒。关闭时机器人不会打扰你，只会在你主动询问时告知你课程与日程安排。"
+  },
+  "remind_advance_minutes": {
+    "description": "课程与日程提醒提前分钟数",
+    "type": "int",
+    "default": 15,
+    "hint": "当开启「启用课程与日程主动提醒」时生效，设置课前或日程开始前提前多少分钟提醒（默认 15 分钟）。"
+  }
+}
