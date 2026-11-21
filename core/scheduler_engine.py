@@ -187,6 +187,38 @@ class SchedulerEngine:
         active_items.sort(key=lambda x: (x.get("start_time") or "00:00", 0 if x["kind"] == "course" else 1))
         return config, week_num, active_items, cancelled_items
 
+    @staticmethod
+    def describe_weeks_list(weeks: List[int]) -> str:
+        """将周次数组转换为准确的中文描述（如 '1-15单周'、'2-16双周'、'1-8,10-16周'），避免 AI 误读单双周。"""
+        if not weeks:
+            return "无周次"
+        sorted_w = sorted(list({int(w) for w in weeks if int(w) >= 1}))
+        if len(sorted_w) == 1:
+            return f"第{sorted_w[0]}周"
+
+        min_w, max_w = sorted_w[0], sorted_w[-1]
+        is_all_odd = all(w % 2 == 1 for w in sorted_w)
+        is_all_even = all(w % 2 == 0 for w in sorted_w)
+        expected_half = (max_w - min_w) // 2 + 1
+
+        if is_all_odd and len(sorted_w) == expected_half and len(sorted_w) >= 3:
+            return f"{min_w}-{max_w}单周"
+        if is_all_even and len(sorted_w) == expected_half and len(sorted_w) >= 3:
+            return f"{min_w}-{max_w}双周"
+
+        ranges = []
+        start = sorted_w[0]
+        prev = sorted_w[0]
+        for w in sorted_w[1:]:
+            if w == prev + 1:
+                prev = w
+            else:
+                ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+                start = w
+                prev = w
+        ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+        return f"{','.join(ranges)}周"
+
     def format_all_courses_summary(self, profile_id: Optional[str] = None) -> str:
         """返回当前学期全部固定课程的汇总列表（按星期和节次排序）。"""
         pid = self.storage.resolve_profile_id(profile_id)
@@ -194,6 +226,8 @@ class SchedulerEngine:
         courses = self.storage.load_courses(profile_id=pid)
         profiles = self.storage.list_profiles()
         prof_name = next((p["name"] for p in profiles if p["id"] == pid), config.semester_name)
+        cur_week = self.calculate_teaching_week(date.today(), config)
+        cur_parity = "单周" if cur_week % 2 == 1 else "双周"
 
         if not courses:
             return f"【课表：{prof_name}（{config.semester_name}）｜全部固定课程】\n当前课表为空，尚未添加任何固定课程。"
@@ -203,7 +237,7 @@ class SchedulerEngine:
         )
         unique_count = len({c.name.strip() for c in sorted_courses if c.name.strip()})
         lines = [
-            f"【课表：{prof_name}（{config.semester_name}）｜全部固定课程列表（共 {unique_count} 门课 / {len(sorted_courses)} 个上课时段）】"
+            f"【课表：{prof_name}（{config.semester_name}）｜当前为第 {cur_week} 教学周（{cur_parity}）｜全部固定课程列表（共 {unique_count} 门课 / {len(sorted_courses)} 个上课时段）】"
         ]
         for idx, c in enumerate(sorted_courses, start=1):
             wd = WEEKDAY_CN.get(c.day_of_week, f"周{c.day_of_week}")
@@ -213,9 +247,43 @@ class SchedulerEngine:
                 else f"第{c.start_period}-{c.end_period}节"
             )
             start_t, end_t = self.get_course_time_range(c, config)
-            w_min, w_max = (min(c.weeks), max(c.weeks)) if c.weeks else (1, 16)
-            w_text = f"{w_min}-{w_max}周" if w_min != w_max else f"第{w_min}周"
-            line = f"{idx}. [{wd} {p_text} ({start_t}-{end_t})] {c.name}｜周次：{w_text}"
+            w_text = self.describe_weeks_list(c.weeks)
+            active_flag = "（本周有课）" if cur_week in c.weeks else "（本周无课）"
+            line = f"{idx}. [{wd} {p_text} ({start_t}-{end_t})] {c.name}｜周次：{w_text}{active_flag}"
+            if c.location:
+                line += f"｜地点：{c.location}"
+            if c.teacher:
+                line += f"｜教师：{c.teacher}"
+            lines.append(line)
+        return "\n".join(lines)
+
+    def format_week_schedule_summary(
+        self, week_num: Optional[int] = None, profile_id: Optional[str] = None
+    ) -> str:
+        """返回指定教学周（默认当前教学周）周一至周日仅在本周生效的课程表。"""
+        pid = self.storage.resolve_profile_id(profile_id)
+        config = self.storage.load_config(profile_id=pid)
+        courses = self.storage.load_courses(profile_id=pid)
+        target_week = week_num if week_num is not None else self.calculate_teaching_week(date.today(), config)
+        parity = "单周" if target_week % 2 == 1 else "双周"
+
+        week_courses = [c for c in courses if target_week in c.weeks]
+        week_courses.sort(key=lambda c: (c.day_of_week, c.start_period, c.end_period))
+
+        lines = [f"【{config.semester_name}｜第 {target_week} 教学周（{parity}）周课表（仅显示本周有课的安排）】"]
+        if not week_courses:
+            lines.append("本周暂无任何固定课程安排。")
+            return "\n".join(lines)
+
+        for idx, c in enumerate(week_courses, start=1):
+            wd = WEEKDAY_CN.get(c.day_of_week, f"周{c.day_of_week}")
+            p_text = (
+                f"第{c.start_period}节"
+                if c.start_period == c.end_period
+                else f"第{c.start_period}-{c.end_period}节"
+            )
+            start_t, end_t = self.get_course_time_range(c, config)
+            line = f"{idx}. [{wd} {p_text} ({start_t}-{end_t})] {c.name}"
             if c.location:
                 line += f"｜地点：{c.location}"
             if c.teacher:
@@ -252,6 +320,12 @@ class SchedulerEngine:
 
         if raw_q in ("all", "all_courses", "全部", "所有课程", "全部课程"):
             return self.format_all_courses_summary(profile_id=pid)
+        if raw_q in ("this_week", "week", "本周", "这周", "本周课表", "这周课表"):
+            return self.format_week_schedule_summary(profile_id=pid)
+        if raw_q in ("next_week", "下周", "下周课表"):
+            cur_w = self.calculate_teaching_week(base_date or date.today(), self.storage.load_config(profile_id=pid))
+            return self.format_week_schedule_summary(week_num=cur_w + 1, profile_id=pid)
+
         target_date = self.resolve_date_str(date_str, base_date=base_date)
         config, week_num, active_items, cancelled_items = self.get_day_schedule_items(
             target_date, profile_id=pid

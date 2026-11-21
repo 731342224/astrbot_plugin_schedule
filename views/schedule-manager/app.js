@@ -49,7 +49,7 @@ const state = {
   events: [],
   currentWeek: 1,
   selectedWeek: 1,
-  showInactiveCourses: true,
+  showInactiveCourses: false,
   eventsSortDesc: true,
   editingPeriodsDraft: {},
   eduSessionId: "",

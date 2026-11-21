@@ -45,6 +45,7 @@ astrbot_plugin_schedule/
 ├── metadata.yaml                     # 插件元数据与 views 视图声明
 ├── _conf_schema.json                 # 插件配置 Schema（上下文注入与提醒开关）
 ├── requirements.txt                  # Python 第三方依赖声明
+├── CHANGELOG.md                      # 完整版本更新日志
 ├── main.py                           # 插件主入口、@llm_tool 工具与 Web API 路由
 ├── core/
 │   ├── models.py                     # SemesterConfig / Course / ScheduleEvent 数据模型
@@ -58,3 +59,19 @@ astrbot_plugin_schedule/
         ├── style.css                 # 亮/暗主题自适应样式表
         └── app.js                    # 基于 AstrBotPluginView Bridge SDK 的前端逻辑
 ```
+
+---
+
+## 📑 最近更新日志（完整历史见 [CHANGELOG.md](./CHANGELOG.md)）
+
+- **v1.8.2**：默认隐藏周课表网格中的非本周课程；新增 `this_week` / `next_week` AI 查询模式；优化单双周与分段周次描述并显式标注 `（本周有课/无课）`，彻底避免 AI 算错周次。
+- **v1.8.1**：统一顶部课表下拉框与课程徽章按同名去重后的实际课程门数（如 `16 门课程 (27 时段)`）统计。
+- **v1.8.0**：修复 WakeUp `.ics` 导入的教师与上课教室错位/重复问题，并支持对已入库 `courses.json` 自动纠偏落盘。
+- **v1.7.0**：「📚 全部课程管理」升级为同名课程多时段聚合卡片，支持内嵌查看所有周次时段、一键为该课增加时段、单时段移除与整门删除。
+- **v1.6.0**：周课表网格同时间段多门不同周次课程采用「主卡 + 底部折叠抽屉条」切换设计。
+- **v1.5.0**：新增课表导出功能（支持导出 `.ics` 标准日历与 `.json` 备份包）。
+- **v1.4.0**：新增多份课表档案管理与切换（WebUI 顶部下拉秒切 + AI 对话跨课表查询/切换）。
+- **v1.3.0**：新增「📚 全部课程管理」Tab 页与「🗑️ 清空课表」功能。
+- **v1.2.0**：新增「🎓 教务处自动登录与课表一键导入」（支持正方/强智/通用教务、验证码拉取、内置网页与 HTML/WakeUp 解析）。
+- **v1.1.0**：新增「是否开启课前主动提醒」开关，修复 Bridge SDK 注入与同源请求回退。
+- **v1.0.0**：初始版本发布。

@@ -20,7 +20,7 @@ PLUGIN_NAME = "astrbot_plugin_schedule"
     PLUGIN_NAME,
     "夜玄",
     "智能课表与日程管家：让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程",
-    "1.8.1",
+    "1.8.2",
     "https://github.com/731342224/astrbot_plugin_schedule",
 )
 class SchedulePlugin(Star):
@@ -115,7 +115,7 @@ class SchedulePlugin(Star):
         """查询指定日期的课程表与临时日程安排、查看全部固定课程列表，或查看所有已保存的多份课表列表。系统会自动计算教学周次与单双周，并剔除当天已标记停课的课程。
 
         Args:
-            date_str(string): 目标日期，支持 "today"（今天）、"tomorrow"（明天）、"day_after_tomorrow"（后天）、"YYYY-MM-DD"（如 "2026-11-23"）、"all"（查看全部固定课程总表）或 "profiles"（查看所有保存的课表列表）。
+            date_str(string): 目标日期，支持 "today"（今天）、"tomorrow"（明天）、"day_after_tomorrow"（后天）、"YYYY-MM-DD"（如 "2026-11-23"）、"this_week"（查看本周有效周课表，不含非本周课程）、"next_week"（查看下周有效周课表）、"all"（查看全部固定课程总表）或 "profiles"（查看所有保存的课表列表）。
             profile_name(string): 可选，指定要查询哪一份课表的名称（例如 "大二下课表"、"室友课表"），留空则查询当前激活的默认课表。
         """
         try:
