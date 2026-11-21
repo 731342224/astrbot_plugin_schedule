@@ -114,6 +114,21 @@ class Course:
             weeks_list = list(range(1, 17))
 
         name = str(data.get("name", "")).strip()
+        teacher = str(data.get("teacher", "")).strip()
+        location = str(data.get("location", "")).strip()
+
+        # 自动修复旧版本导入或 WakeUp ICS 导致的 location="天工南212 王新蕾", teacher="天工南212" 错位问题
+        if location and " " in location:
+            loc_parts = [p.strip() for p in location.split() if p.strip()]
+            if len(loc_parts) == 2:
+                part_room, part_teacher = loc_parts[0], loc_parts[1]
+                # 若 teacher 为空，或者 teacher 误等于前面的教室名（如 "天工南212"），则纠正
+                if not teacher or teacher == part_room or teacher == location:
+                    location = part_room
+                    teacher = part_teacher
+        elif location and teacher and teacher == location:
+            teacher = ""
+
         color = str(data.get("color", "")).strip()
         if not color:
             color = COURSE_PALETTE[abs(hash(name)) % len(COURSE_PALETTE)]
@@ -124,8 +139,8 @@ class Course:
         return cls(
             id=str(data.get("id", "")).strip() or f"course_{uuid.uuid4().hex[:8]}",
             name=name,
-            teacher=str(data.get("teacher", "")).strip(),
-            location=str(data.get("location", "")).strip(),
+            teacher=teacher,
+            location=location,
             day_of_week=int(data.get("day_of_week", 1)),
             start_period=start_p,
             end_period=max(start_p, end_p),

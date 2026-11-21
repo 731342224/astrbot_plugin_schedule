@@ -303,15 +303,21 @@ function renderTopbar() {
 
   semesterTitleEl.textContent = state.config.semester_name || "未命名学期";
 
+  const uniqueCourseCount = new Set(
+    state.courses.map((c) => (c.name || "").trim()).filter(Boolean)
+  ).size;
+
   // 渲染顶部课表档案切换下拉框
   const profileSelectEl = document.getElementById("profileSelect");
   if (profileSelectEl && Array.isArray(state.profiles)) {
     profileSelectEl.innerHTML = "";
     for (const p of state.profiles) {
+      const isCurProf = p.id === state.activeProfileId || p.is_active;
+      const pCount = isCurProf ? uniqueCourseCount : p.course_count ?? 0;
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = `🗂️ ${p.name} (${p.course_count ?? 0}门课)`;
-      if (p.id === state.activeProfileId || p.is_active) {
+      opt.textContent = `🗂️ ${p.name} (${pCount}门课)`;
+      if (isCurProf) {
         opt.selected = true;
       }
       profileSelectEl.appendChild(opt);
@@ -329,7 +335,10 @@ function renderTopbar() {
     currentWeekBadgeEl.textContent = `当前：第 ${cw} 教学周 (${parity})`;
   }
 
-  courseCountBadgeEl.textContent = `${state.courses.length} 门固定课程`;
+  courseCountBadgeEl.textContent =
+    uniqueCourseCount !== state.courses.length
+      ? `${uniqueCourseCount} 门课程 (${state.courses.length} 时段)`
+      : `${uniqueCourseCount} 门固定课程`;
 
   // 同步顶部是否提醒快捷开关状态
   const topReminderToggle = document.getElementById("topReminderToggle");
@@ -501,18 +510,11 @@ function renderScheduleGrid() {
           const isPrimary = totalInSlot === 1 || idx === focusedIdx;
           const weeksText = formatWeeksSummary(course.weeks);
 
-          // 规避旧数据中 teacher 与 location 重复显示的问题
-          let cleanLoc = (course.location || "").trim();
-          let cleanTeacher = (course.teacher || "").trim();
-          if (cleanLoc && cleanTeacher && cleanTeacher === cleanLoc) {
-            cleanTeacher = "";
-          } else if (cleanLoc && cleanLoc.includes(" ") && !cleanTeacher) {
-            const parts = cleanLoc.split(/\s+/);
-            if (parts.length === 2 && parts[1].length <= 5) {
-              cleanLoc = parts[0];
-              cleanTeacher = parts[1];
-            }
-          }
+          // 规避旧数据中 teacher 与 location 错位或重复显示的问题
+          const { cleanLoc, cleanTeacher } = normalizeLocationAndTeacher(
+            course.location,
+            course.teacher
+          );
 
           const card = document.createElement("div");
           card.style.backgroundColor = course.color || "#4F46E5";
@@ -604,16 +606,40 @@ function renderScheduleGrid() {
 function normalizeLocationAndTeacher(rawLoc, rawTeacher) {
   let cleanLoc = String(rawLoc || "").trim();
   let cleanTeacher = String(rawTeacher || "").trim();
-  if (cleanLoc && cleanTeacher && cleanTeacher === cleanLoc) {
-    cleanTeacher = "";
-  }
-  if (cleanLoc && cleanLoc.includes(" ") && !cleanTeacher) {
-    const parts = cleanLoc.split(/\s+/);
-    if (parts.length === 2 && parts[1].length <= 6 && !/\d/.test(parts[1])) {
-      cleanLoc = parts[0];
-      cleanTeacher = parts[1];
+
+  // 如果 location 是 "天工南212 王新蕾"，而 teacher 为空或误存成了 "天工南212"
+  if (cleanLoc && /\s+/.test(cleanLoc)) {
+    const parts = cleanLoc.split(/\s+/).filter(Boolean);
+    if (parts.length === 2) {
+      const [p0, p1] = parts;
+      const p0IsRoom = /(\d|楼|室|馆|区|场|教|院|堂|实验室|中心)/.test(p0);
+      const p1IsRoom = /(\d|楼|室|馆|区|场|教|院|堂|实验室|中心)/.test(p1);
+      if (p0IsRoom && !p1IsRoom) {
+        if (!cleanTeacher || cleanTeacher === p0 || cleanTeacher === cleanLoc) {
+          return { cleanLoc: p0, cleanTeacher: p1 };
+        }
+      } else if (p1IsRoom && !p0IsRoom) {
+        if (!cleanTeacher || cleanTeacher === p1 || cleanTeacher === cleanLoc) {
+          return { cleanLoc: p1, cleanTeacher: p0 };
+        }
+      } else if (!cleanTeacher || cleanTeacher === p0) {
+        return { cleanLoc: p0, cleanTeacher: p1 };
+      }
     }
   }
+
+  // 如果 teacher 和 location 完全颠倒（例如 teacher="天工南212" 含数字/楼宇，而 location="王新蕾" 不含数字）
+  if (cleanLoc && cleanTeacher) {
+    if (cleanTeacher === cleanLoc) {
+      return { cleanLoc, cleanTeacher: "" };
+    }
+    const locLooksLikeRoom = /(\d|楼|室|馆|区|场|实验室|中心)/.test(cleanLoc);
+    const teacherLooksLikeRoom = /(\d|楼|室|馆|区|场|实验室|中心)/.test(cleanTeacher);
+    if (teacherLooksLikeRoom && !locLooksLikeRoom && cleanLoc.length <= 6) {
+      return { cleanLoc: cleanTeacher, cleanTeacher: cleanLoc };
+    }
+  }
+
   return { cleanLoc, cleanTeacher };
 }
 

@@ -201,7 +201,10 @@ class SchedulerEngine:
         sorted_courses = sorted(
             courses, key=lambda c: (c.day_of_week, c.start_period, c.end_period, c.name)
         )
-        lines = [f"【课表：{prof_name}（{config.semester_name}）｜全部固定课程列表（共 {len(sorted_courses)} 门）】"]
+        unique_count = len({c.name.strip() for c in sorted_courses if c.name.strip()})
+        lines = [
+            f"【课表：{prof_name}（{config.semester_name}）｜全部固定课程列表（共 {unique_count} 门课 / {len(sorted_courses)} 个上课时段）】"
+        ]
         for idx, c in enumerate(sorted_courses, start=1):
             wd = WEEKDAY_CN.get(c.day_of_week, f"周{c.day_of_week}")
             p_text = (

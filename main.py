@@ -20,7 +20,7 @@ PLUGIN_NAME = "astrbot_plugin_schedule"
     PLUGIN_NAME,
     "夜玄",
     "智能课表与日程管家：让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程",
-    "1.0.0",
+    "1.8.1",
     "https://github.com/731342224/astrbot_plugin_schedule",
 )
 class SchedulePlugin(Star):

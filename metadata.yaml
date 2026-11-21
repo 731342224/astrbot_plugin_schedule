@@ -1,11 +1,11 @@
 name: astrbot_plugin_schedule
 display_name: 智能课表与日程管家
-desc: 替代静态课表截图，让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程，支持 WebUI 侧边栏可视化周课表管理与 .ics/.json 一键导入。
-version: 1.0.0
+desc: 替代静态课表截图，让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程，支持 WebUI 侧边栏可视化周课表管理、多份课表切换、教务处登录导入与 .ics/.json 导入导出。
+version: 1.8.1
 author: 夜玄
 repo: https://github.com/731342224/astrbot_plugin_schedule
 astrbot_version: ">=4.16,<5"
 views:
   - name: schedule-manager
     title: 智能课表与日程管家
-    desc: 可视化周课表网格编辑、学期作息设置、ICS/JSON 导入及临时日程管理
+    desc: 可视化周课表网格编辑、多课表切换、教务处导入、学期作息设置及临时日程管理

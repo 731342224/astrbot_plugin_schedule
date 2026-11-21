@@ -119,12 +119,14 @@ class ScheduleStorage:
                 pid = str(p["id"])
                 p_cfg = self.load_config(profile_id=pid)
                 p_courses = self.load_courses(profile_id=pid)
+                unique_names = {c.name.strip() for c in p_courses if c.name and c.name.strip()}
                 result.append(
                     {
                         "id": pid,
                         "name": str(p.get("name") or p_cfg.semester_name or pid),
                         "semester_name": p_cfg.semester_name,
-                        "course_count": len(p_courses),
+                        "course_count": len(unique_names),
+                        "slot_count": len(p_courses),
                         "is_active": pid == active_id,
                     }
                 )
@@ -297,12 +299,21 @@ class ScheduleStorage:
         if not isinstance(raw, list):
             return []
         courses: List[Course] = []
+        needs_resave = False
         for item in raw:
             if isinstance(item, dict):
                 try:
-                    courses.append(Course.from_dict(item))
+                    c = Course.from_dict(item)
+                    if c.location != item.get("location") or c.teacher != item.get("teacher"):
+                        needs_resave = True
+                    courses.append(c)
                 except Exception:
                     continue
+        if needs_resave and courses:
+            try:
+                self.save_courses(courses, profile_id=profile_id)
+            except Exception:
+                pass
         return courses
 
     def save_courses(self, courses: List[Course], profile_id: Optional[str] = None) -> List[Course]:

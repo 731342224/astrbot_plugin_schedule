@@ -91,12 +91,19 @@ def _extract_teacher_and_location(
         course_name = parts[0].strip()
         loc = parts[1].strip()
 
-    # WakeUp 导出的 LOCATION 常常是 "天工102 周继振"（教室 + 空格 + 教师姓名）
+    # WakeUp 导出的 LOCATION 常常是 "天工南212 王新蕾"（教室 + 空格 + 教师姓名）或 "王新蕾 天工南212"
     if loc and " " in loc and not teacher:
         loc_parts = [p.strip() for p in loc.split() if p.strip()]
-        if len(loc_parts) == 2 and 1 < len(loc_parts[1]) <= 6 and not re.search(r"\d", loc_parts[1]):
-            loc = loc_parts[0]
-            teacher = loc_parts[1]
+        if len(loc_parts) == 2:
+            p0, p1 = loc_parts[0], loc_parts[1]
+            p0_is_room = bool(re.search(r"(\d|楼|室|馆|区|场|教|院|堂|实验室|中心)", p0))
+            p1_is_room = bool(re.search(r"(\d|楼|室|馆|区|场|教|院|堂|实验室|中心)", p1))
+            if p0_is_room and not p1_is_room:
+                loc, teacher = p0, p1
+            elif p1_is_room and not p0_is_room:
+                loc, teacher = p1, p0
+            elif len(p1) <= 6 and not re.search(r"\d", p1):
+                loc, teacher = p0, p1
 
     # 解析 description 中的教师与地点信息
     # WakeUp / 小爱常见格式：
