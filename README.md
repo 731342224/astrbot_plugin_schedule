@@ -16,9 +16,8 @@
    - **📚 全部课程聚合管理**：同名不同周次/不同星期的课程自动聚合为一张卡片，直观展示所有时段与周次，支持单时段编辑/移除、一键为该课增加新时段、整门删除、搜索筛选与一键清空课表。
    - **🗂️ 多份课表档案支持**：可创建并随时切换多份独立课表（如：大二上学期、大二下学期、室友课表、考研时间表）。
 
-3. **🎓 多种课表一键导入与导出**
-   - **教务处登录直连导入**：支持新版正方教务 (`/jwglxt`)、强智科技教务 (`/jsxsd`)、旧版正方、金智/树维/URP 等系统（支持自动拉取图形验证码、内置网页打开、Cookie 免密抓取、网页 HTML 源码/WakeUp 文本一键解析）。
-   - **文件导入 (`.ics` / `.json` / `.html`)**：支持展开 iCalendar `RRULE` 重复规则并结合学期作息反推周次与节次，兼容 WakeUp 课程表、小爱课程表及教务处导出文件。
+3. **📥 标准课表文件导入与导出**
+   - **文件导入 (`.ics` / `.json`)**：支持展开 iCalendar `RRULE` 重复规则并结合学期作息反推周次与节次，完美兼容 WakeUp 课程表、小爱课程表及各类导出的 `.ics` / `.json` 文件。
    - **课表导出 (`.ics` / `.json`)**：支持将课表与临时日程导出为标准 `.ics` 日历文件（可直接导入 iPhone/iPad/安卓系统日历、Outlook、Google Calendar）或 `.json` 完整备份包。
 
 ---
@@ -51,7 +50,6 @@ astrbot_plugin_schedule/
 │   ├── models.py                     # SemesterConfig / Course / ScheduleEvent 数据模型
 │   ├── storage.py                    # 多课表档案与 JSON 线程安全持久化存储
 │   ├── parser.py                     # .ics / .json 课表解析器与导出器
-│   ├── edu_scraper.py                # 教务处登录会话、验证码与 HTML 表格解析引擎
 │   └── scheduler_engine.py           # 教学周/单双周推算与自然语言摘要引擎
 └── views/
     └── schedule-manager/
@@ -64,6 +62,7 @@ astrbot_plugin_schedule/
 
 ## 📑 最近更新日志（完整历史见 [CHANGELOG.md](./CHANGELOG.md)）
 
+- **v1.9.0**：移除教务处登录导入模块及相关第三方依赖（`httpx`、`beautifulsoup4`、`pycryptodome`），仅保留干净轻量的 `.ics` / `.json` 文件导入与导出。
 - **v1.8.2**：默认隐藏周课表网格中的非本周课程；新增 `this_week` / `next_week` AI 查询模式；优化单双周与分段周次描述并显式标注 `（本周有课/无课）`，彻底避免 AI 算错周次。
 - **v1.8.1**：统一顶部课表下拉框与课程徽章按同名去重后的实际课程门数（如 `16 门课程 (27 时段)`）统计。
 - **v1.8.0**：修复 WakeUp `.ics` 导入的教师与上课教室错位/重复问题，并支持对已入库 `courses.json` 自动纠偏落盘。

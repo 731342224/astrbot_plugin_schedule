@@ -11,7 +11,6 @@ from .core.models import SemesterConfig
 from .core.storage import ScheduleStorage
 from .core.parser import ScheduleParser
 from .core.scheduler_engine import SchedulerEngine
-from .core.edu_scraper import EduSessionManager, EduHtmlTableParser
 
 PLUGIN_NAME = "astrbot_plugin_schedule"
 
@@ -20,7 +19,7 @@ PLUGIN_NAME = "astrbot_plugin_schedule"
     PLUGIN_NAME,
     "夜玄",
     "智能课表与日程管家：让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程",
-    "1.8.2",
+    "1.9.0",
     "https://github.com/731342224/astrbot_plugin_schedule",
 )
 class SchedulePlugin(Star):
@@ -34,7 +33,6 @@ class SchedulePlugin(Star):
         data_dir = self._resolve_data_dir()
         self.storage = ScheduleStorage(data_dir=data_dir)
         self.engine = SchedulerEngine(self.storage)
-        self.edu_manager = EduSessionManager()
 
         # 注册侧边栏 WebUI 通信路由
         self._register_web_apis()
@@ -85,17 +83,13 @@ class SchedulePlugin(Star):
         routes = [
             (f"/{PLUGIN_NAME}/overview", self.api_overview, ["GET"], "获取学期配置、固定课程与当前教学周"),
             (f"/{PLUGIN_NAME}/config/save", self.api_config_save, ["POST"], "保存学期与作息设置"),
-            (f"/{PLUGIN_NAME}/import", self.api_import, ["POST"], "导入 .ics、.json 或教务处 HTML 课表"),
+            (f"/{PLUGIN_NAME}/import", self.api_import, ["POST"], "导入 .ics 或 .json 课表"),
             (f"/{PLUGIN_NAME}/export", self.api_export, ["GET", "POST"], "导出当前课表为 .ics 或 .json 文件"),
             (f"/{PLUGIN_NAME}/course/save", self.api_course_save, ["POST"], "新增或编辑固定课程"),
             (f"/{PLUGIN_NAME}/course/delete", self.api_course_delete, ["POST"], "删除固定课程"),
             (f"/{PLUGIN_NAME}/events", self.api_events_list, ["GET"], "获取所有临时日程与停课记录"),
             (f"/{PLUGIN_NAME}/events/save", self.api_events_save, ["POST"], "新增、编辑或删除临时日程与调课"),
             (f"/{PLUGIN_NAME}/profiles", self.api_profiles_manage, ["GET", "POST"], "管理与切换多份课表档案"),
-            (f"/{PLUGIN_NAME}/edu/init", self.api_edu_init, ["POST"], "初始化教务处登录会话并获取图形验证码"),
-            (f"/{PLUGIN_NAME}/edu/captcha", self.api_edu_captcha, ["POST"], "刷新教务处图形验证码"),
-            (f"/{PLUGIN_NAME}/edu/login_import", self.api_edu_login_import, ["POST"], "登录教务处并自动抓取导入课表"),
-            (f"/{PLUGIN_NAME}/edu/fetch_url", self.api_edu_fetch_url, ["POST"], "通过内置网址/Cookie抓取或预览教务课表"),
         ]
 
         for path, handler, methods, desc in routes:
@@ -339,10 +333,8 @@ class SchedulePlugin(Star):
                 parsed_courses, extracted_cfg = ScheduleParser.parse_json_content(content)
                 if extracted_cfg:
                     config = self.storage.update_config(extracted_cfg)
-            elif file_type in ("html", "edu", "wakeup"):
-                parsed_courses = EduHtmlTableParser.parse_any_content(content)
             else:
-                return error_response(f"不支持的文件类型: {file_type}（仅支持 ics、json 或 html）", status=400)
+                return error_response(f"不支持的文件类型: {file_type}（仅支持 ics 或 json）", status=400)
 
             final_courses = self.storage.import_courses(parsed_courses, mode=mode)
             return json_response(
@@ -547,143 +539,3 @@ class SchedulePlugin(Star):
             logger.error(f"[{PLUGIN_NAME}] api_events_save error: {e}")
             return error_response(str(e), status=400)
 
-    # =========================================================================
-    # 教务处登录与自动导入课表 API
-    # =========================================================================
-
-    async def api_edu_init(self):
-        """POST /astrbot_plugin_schedule/edu/init
-        JSON Body: {url: string, sys_type: 'auto'|'zfnew'|'qz'|'zfold'|'generic'}
-        """
-        try:
-            body = await self._parse_request_json()
-            url = str(body.get("url", "")).strip()
-            sys_type = str(body.get("sys_type", "auto")).strip()
-            if not url:
-                return error_response("请输入教务处登录网址 URL", status=400)
-
-            info = await self.edu_manager.init_login_session(url, sys_type=sys_type)
-            return json_response({"status": "ok", **info})
-        except Exception as e:
-            logger.error(f"[{PLUGIN_NAME}] api_edu_init error: {e}")
-            return error_response(f"连接教务处失败：{str(e)}", status=400)
-
-    async def api_edu_captcha(self):
-        """POST /astrbot_plugin_schedule/edu/captcha
-        JSON Body: {session_id: string}
-        """
-        try:
-            body = await self._parse_request_json()
-            session_id = str(body.get("session_id", "")).strip()
-            if not session_id:
-                return error_response("缺少 session_id", status=400)
-
-            b64 = await self.edu_manager.refresh_captcha(session_id)
-            return json_response({"status": "ok", "captcha_base64": b64})
-        except Exception as e:
-            logger.error(f"[{PLUGIN_NAME}] api_edu_captcha error: {e}")
-            return error_response(f"刷新验证码失败：{str(e)}", status=400)
-
-    async def api_edu_login_import(self):
-        """POST /astrbot_plugin_schedule/edu/login_import
-        JSON Body: {
-            session_id, username, password, captcha,
-            academic_year, semester_term, schedule_url, mode
-        }
-        """
-        try:
-            body = await self._parse_request_json()
-            session_id = str(body.get("session_id", "")).strip()
-            username = str(body.get("username", "")).strip()
-            password = str(body.get("password", "")).strip()
-            captcha = str(body.get("captcha", "")).strip()
-            academic_year = str(body.get("academic_year", "2026")).strip()
-            semester_term = str(body.get("semester_term", "1")).strip()
-            schedule_url = str(body.get("schedule_url", "")).strip()
-            mode = str(body.get("mode", "overwrite")).strip().lower()
-            if mode not in ("overwrite", "merge"):
-                mode = "overwrite"
-
-            if not session_id:
-                return error_response("请先点击「连接并获取验证码」初始化教务处会话", status=400)
-            if not username or not password:
-                return error_response("请输入教务处学号与密码", status=400)
-
-            parsed_courses = await self.edu_manager.login_and_fetch_courses(
-                session_id=session_id,
-                username=username,
-                password=password,
-                captcha=captcha,
-                academic_year=academic_year,
-                semester_term=semester_term,
-                schedule_url=schedule_url,
-            )
-
-            final_courses = self.storage.import_courses(parsed_courses, mode=mode)
-            return json_response(
-                {
-                    "status": "ok",
-                    "message": f"成功从教务处抓取并导入 {len(parsed_courses)} 门课程！",
-                    "imported_count": len(parsed_courses),
-                    "total_count": len(final_courses),
-                    "courses": [c.to_dict() for c in final_courses],
-                }
-            )
-        except Exception as e:
-            logger.error(f"[{PLUGIN_NAME}] api_edu_login_import error: {e}")
-            return error_response(str(e), status=400)
-
-    async def api_edu_fetch_url(self):
-        """POST /astrbot_plugin_schedule/edu/fetch_url
-        支持内置网页预览 / Cookie 免密抓取 / 直接解析教务处网页 HTML
-        JSON Body: {url: string, cookie: string, html_content: string, mode: 'overwrite'|'merge', preview_only: bool}
-        """
-        try:
-            body = await self._parse_request_json()
-            url = str(body.get("url", "")).strip()
-            cookie = str(body.get("cookie", "")).strip()
-            html_content = str(body.get("html_content", "")).strip()
-            mode = str(body.get("mode", "overwrite")).strip().lower()
-            preview_only = bool(body.get("preview_only", False))
-            if mode not in ("overwrite", "merge"):
-                mode = "overwrite"
-
-            raw_html = html_content
-            if not raw_html:
-                if not url:
-                    return error_response("请提供教务课表页面 URL 或直接粘贴课表网页 HTML/JSON 内容", status=400)
-                parsed_courses, raw_html = await self.edu_manager.fetch_by_cookie_or_url(
-                    target_url=url, cookie_str=cookie
-                )
-            else:
-                parsed_courses = EduHtmlTableParser.parse_any_content(raw_html)
-
-            if preview_only:
-                return json_response(
-                    {
-                        "status": "ok",
-                        "detected_count": len(parsed_courses),
-                        "courses_preview": [c.to_dict() for c in parsed_courses],
-                        "html_preview": raw_html[:60000],
-                    }
-                )
-
-            if not parsed_courses:
-                return error_response(
-                    "未能在页面中识别到课程表数据，请确认已打开包含课表表格的页面或检查 Cookie 是否有效。",
-                    status=400,
-                )
-
-            final_courses = self.storage.import_courses(parsed_courses, mode=mode)
-            return json_response(
-                {
-                    "status": "ok",
-                    "message": f"成功识别并导入 {len(parsed_courses)} 门课程！",
-                    "imported_count": len(parsed_courses),
-                    "total_count": len(final_courses),
-                    "courses": [c.to_dict() for c in final_courses],
-                }
-            )
-        except Exception as e:
-            logger.error(f"[{PLUGIN_NAME}] api_edu_fetch_url error: {e}")
-            return error_response(f"抓取课表失败：{str(e)}", status=400)

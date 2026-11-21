@@ -52,7 +52,6 @@ const state = {
   showInactiveCourses: false,
   eventsSortDesc: true,
   editingPeriodsDraft: {},
-  eduSessionId: "",
   activeProfileId: "default",
   profiles: [{ id: "default", name: "默认课表", course_count: 0, is_active: true }],
   slotFocusedCourseId: {},
@@ -1001,7 +1000,7 @@ function renderAllCoursesList() {
   if (filtered.length === 0) {
     container.innerHTML = `<div class="empty-state">${
       state.courses.length === 0
-        ? "当前还没有添加任何固定课程。可以在上方表单直接添加，或点击顶部「🎓 教务处登录导入」/「📥 文件导入」！"
+        ? "当前还没有添加任何固定课程。可以在上方表单直接添加，或点击顶部「📥 导入课表 (.ics/.json)」！"
         : "没有匹配筛选条件的课程。"
     }</div>`;
     return;
@@ -1184,8 +1183,6 @@ function handleLocalFileSelected(file) {
     typeSelect.value = "json";
   } else if (lower.endsWith(".ics")) {
     typeSelect.value = "ics";
-  } else if (lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".txt")) {
-    typeSelect.value = "html";
   }
 
   const reader = new FileReader();
@@ -1225,198 +1222,6 @@ async function handleConfirmImport() {
     await loadOverview(true);
   } catch (err) {
     showToast(`导入失败: ${err.message || err}`, "error");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-}
-
-// ==================== 教务处自动登录 / 内置网页与 HTML 一键导入 ====================
-
-const SYS_TYPE_LABELS = {
-  zfnew: "新版正方教务系统",
-  qz: "强智科技教务系统",
-  zfold: "旧版正方教务系统",
-  generic: "通用教务系统",
-};
-
-async function handleEduConnect() {
-  const urlInput = document.getElementById("eduLoginUrl");
-  const sysSelect = document.getElementById("eduSysType");
-  const statusEl = document.getElementById("eduSessionStatus");
-  const btn = document.getElementById("eduConnectBtn");
-  const captchaImg = document.getElementById("eduCaptchaImg");
-  const captchaPlaceholder = document.getElementById("eduCaptchaPlaceholder");
-  const refreshBtn = document.getElementById("eduRefreshCaptchaBtn");
-
-  const url = urlInput.value.trim();
-  if (!url) {
-    showToast("请先输入学校教务处登录网址 URL", "error");
-    return;
-  }
-
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "⏳ 正在连接...";
-
-  try {
-    const res = await callBridgeApi("edu/init", "POST", {
-      url,
-      sys_type: sysSelect.value,
-    });
-    const data = res?.data && res.data.session_id ? res.data : res;
-    state.eduSessionId = data.session_id || "";
-
-    const sysLabel = SYS_TYPE_LABELS[data.sys_type] || data.sys_type || "教务系统";
-    statusEl.textContent = `✅ 已连接（识别为：${sysLabel}）`;
-    statusEl.classList.add("connected");
-
-    if (data.captcha_base64) {
-      captchaImg.src = data.captcha_base64;
-      captchaImg.style.display = "inline-block";
-      captchaPlaceholder.style.display = "none";
-      refreshBtn.style.display = "inline-flex";
-      showToast("已连接教务处并获取图形验证码", "success");
-    } else {
-      captchaImg.style.display = "none";
-      refreshBtn.style.display = "none";
-      captchaPlaceholder.style.display = "inline";
-      captchaPlaceholder.textContent = "当前登录页未检测到图形验证码，可直接输入账号密码登录";
-      showToast(`已成功连接教务处（${sysLabel}）`, "success");
-    }
-  } catch (err) {
-    statusEl.textContent = `❌ 连接失败：${err.message || err}`;
-    statusEl.classList.remove("connected");
-    showToast(`连接教务处失败: ${err.message || err}`, "error");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-}
-
-async function handleEduRefreshCaptcha() {
-  if (!state.eduSessionId) {
-    await handleEduConnect();
-    return;
-  }
-  try {
-    const res = await callBridgeApi("edu/captcha", "POST", {
-      session_id: state.eduSessionId,
-    });
-    const data = res?.data && res.data.captcha_base64 ? res.data : res;
-    if (data.captcha_base64) {
-      const captchaImg = document.getElementById("eduCaptchaImg");
-      captchaImg.src = data.captcha_base64;
-      captchaImg.style.display = "inline-block";
-    }
-  } catch (err) {
-    showToast(`刷新验证码失败: ${err.message || err}`, "error");
-  }
-}
-
-async function handleEduLoginImport() {
-  const username = document.getElementById("eduUsername").value.trim();
-  const password = document.getElementById("eduPassword").value.trim();
-  const captcha = document.getElementById("eduCaptchaInput").value.trim();
-  const academic_year = document.getElementById("eduAcademicYear").value.trim() || "2026";
-  const semester_term = document.getElementById("eduSemesterTerm").value || "1";
-  const schedule_url = document.getElementById("eduCustomScheduleUrl").value.trim();
-  const mode = document.getElementById("eduImportMode").value || "overwrite";
-
-  if (!state.eduSessionId) {
-    await handleEduConnect();
-    if (!state.eduSessionId) return;
-  }
-
-  if (!username || !password) {
-    showToast("请填写学号与教务处密码", "error");
-    return;
-  }
-
-  const btn = document.getElementById("eduLoginImportBtn");
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "⏳ 正在登录并抓取课表...";
-
-  try {
-    const res = await callBridgeApi("edu/login_import", "POST", {
-      session_id: state.eduSessionId,
-      username,
-      password,
-      captcha,
-      academic_year,
-      semester_term,
-      schedule_url,
-      mode,
-    });
-    const msg = res?.message || res?.data?.message || "教务处课表导入成功！";
-    showToast(msg, "success");
-    closeModal("eduModal");
-    await loadOverview(true);
-  } catch (err) {
-    showToast(`教务处导入失败: ${err.message || err}`, "error");
-    // 验证码可能失效，自动尝试刷新验证码
-    if (state.eduSessionId) {
-      handleEduRefreshCaptcha();
-    }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-}
-
-async function handleEduWebviewImport(previewOnly = false) {
-  const url = document.getElementById("eduWebviewUrl").value.trim();
-  const cookie = document.getElementById("eduCookieInput").value.trim();
-  const html_content = document.getElementById("eduRawHtmlTextarea").value.trim();
-  const mode = document.getElementById("eduHtmlImportMode").value || "overwrite";
-  const previewBox = document.getElementById("eduParsePreviewResult");
-
-  if (!url && !html_content) {
-    showToast("请填写课表页面 URL 或在下方粘贴课表网页 HTML / JSON 内容", "error");
-    return;
-  }
-
-  const btn = document.getElementById(previewOnly ? "eduPreviewParseBtn" : "eduWebviewImportBtn");
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "⏳ 正在解析...";
-
-  try {
-    const res = await callBridgeApi("edu/fetch_url", "POST", {
-      url,
-      cookie,
-      html_content,
-      mode,
-      preview_only: previewOnly,
-    });
-    const data = res?.data && typeof res.data === "object" ? res.data : res;
-
-    if (previewOnly) {
-      const list = Array.isArray(data.courses_preview) ? data.courses_preview : [];
-      previewBox.style.display = "block";
-      if (list.length === 0) {
-        previewBox.innerHTML = `⚠️ 未在该内容中检测到课程，请确认粘贴的是包含课表表格的 HTML 源码或正方 JSON。`;
-      } else {
-        const names = list
-          .slice(0, 8)
-          .map(
-            (c) =>
-              `《${escapeHtml(c.name)}》(${WEEKDAY_NAMES[c.day_of_week]} 第${c.start_period}-${c.end_period}节)`
-          )
-          .join("、");
-        previewBox.innerHTML = `✅ 成功识别出 <strong>${list.length}</strong> 门课程：${names}${
-          list.length > 8 ? " 等..." : ""
-        }`;
-      }
-    } else {
-      const msg = data?.message || "成功解析并导入教务课表！";
-      showToast(msg, "success");
-      closeModal("eduModal");
-      await loadOverview(true);
-    }
-  } catch (err) {
-    showToast(`${previewOnly ? "预解析" : "导入"}失败: ${err.message || err}`, "error");
   } finally {
     btn.disabled = false;
     btn.textContent = origText;
@@ -2022,10 +1827,6 @@ function bindUIEvents() {
     openCourseModal(null);
   });
 
-  document.getElementById("openEduModalBtn").addEventListener("click", () => {
-    document.getElementById("eduModal").style.display = "flex";
-  });
-
   document.getElementById("openImportModalBtn").addEventListener("click", () => {
     document.getElementById("importModal").style.display = "flex";
   });
@@ -2074,68 +1875,6 @@ function bindUIEvents() {
   });
   document.getElementById("courseSearchInput").addEventListener("input", renderAllCoursesList);
   document.getElementById("courseDayFilterSelect").addEventListener("change", renderAllCoursesList);
-
-  // 教务处弹窗内子 Tab 切换与按钮事件
-  document.querySelectorAll(".edu-subtab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".edu-subtab-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const targetId = btn.dataset.edutab;
-      document.getElementById("edu-tab-login").style.display =
-        targetId === "edu-tab-login" ? "flex" : "none";
-      document.getElementById("edu-tab-webview").style.display =
-        targetId === "edu-tab-webview" ? "flex" : "none";
-    });
-  });
-
-  document.getElementById("eduConnectBtn").addEventListener("click", handleEduConnect);
-  document.getElementById("eduCaptchaImg").addEventListener("click", handleEduRefreshCaptcha);
-  document
-    .getElementById("eduRefreshCaptchaBtn")
-    .addEventListener("click", handleEduRefreshCaptcha);
-  document.getElementById("eduLoginImportBtn").addEventListener("click", handleEduLoginImport);
-
-  // 内置网页 / 新窗口打开 / HTML & Cookie 导入
-  document.getElementById("eduLoadIframeBtn").addEventListener("click", () => {
-    let url = document.getElementById("eduWebviewUrl").value.trim();
-    if (!url) {
-      showToast("请先输入学校教务处网址", "error");
-      return;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      url = "http://" + url;
-      document.getElementById("eduWebviewUrl").value = url;
-    }
-    const container = document.getElementById("eduIframeContainer");
-    const iframe = document.getElementById("eduEmbeddedIframe");
-    container.style.display = "block";
-    iframe.src = url;
-  });
-
-  document.getElementById("eduCloseIframeBtn").addEventListener("click", () => {
-    document.getElementById("eduIframeContainer").style.display = "none";
-  });
-
-  document.getElementById("eduOpenExternalBtn").addEventListener("click", () => {
-    let url = document.getElementById("eduWebviewUrl").value.trim();
-    if (!url) {
-      showToast("请先输入学校教务处网址", "error");
-      return;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      url = "http://" + url;
-      document.getElementById("eduWebviewUrl").value = url;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-  });
-
-  document.getElementById("eduPreviewParseBtn").addEventListener("click", () => {
-    handleEduWebviewImport(true);
-  });
-
-  document.getElementById("eduWebviewImportBtn").addEventListener("click", () => {
-    handleEduWebviewImport(false);
-  });
 
   // 课程弹窗内周次快捷选择按钮
   document.getElementById("weeksAllBtn").addEventListener("click", () => {

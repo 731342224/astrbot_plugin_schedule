@@ -44,11 +44,8 @@
         </div>
 
         <div class="action-buttons">
-          <button type="button" class="btn btn-secondary" id="openEduModalBtn">
-            🎓 教务处登录导入
-          </button>
-          <button type="button" class="btn btn-outline" id="openImportModalBtn">
-            📥 文件导入
+          <button type="button" class="btn btn-secondary" id="openImportModalBtn">
+            📥 导入课表 (.ics/.json)
           </button>
           <button type="button" class="btn btn-outline" id="openExportModalBtn">
             📤 导出课表
@@ -67,7 +64,7 @@
     </header>
 
     <!-- 隐藏的原生 HTML5 文件选择器 -->
-    <input type="file" id="hiddenFileInput" accept=".ics,.json,.html,.htm,.txt" style="display: none;" />
+    <input type="file" id="hiddenFileInput" accept=".ics,.json" style="display: none;" />
 
     <!-- 主视图 Tab 切换栏 -->
     <div class="tabs-bar">
@@ -396,7 +393,6 @@
             <select id="importFileTypeSelect" class="form-select">
               <option value="ics">iCalendar (.ics)</option>
               <option value="json">标准 JSON (.json)</option>
-              <option value="html">教务处课表网页 (.html / .htm)</option>
             </select>
           </div>
         </div>
@@ -476,203 +472,6 @@
           <button type="submit" class="btn btn-primary">💾 保存学期与作息设置</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- 弹窗 4：教务处登录 / 内置网页与免验证码一键导入课表 -->
-  <div class="modal-backdrop" id="eduModal" style="display: none;">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-header">
-        <h3>🎓 教务处自动登录与课表一键导入</h3>
-        <button type="button" class="modal-close" data-close="eduModal">✕</button>
-      </div>
-      <div class="modal-body">
-        <!-- 顶部模式子 Tab -->
-        <div class="edu-subtabs">
-          <button type="button" class="edu-subtab-btn active" data-edutab="edu-tab-login">
-            🔑 账号密码 + 验证码登录抓取
-          </button>
-          <button type="button" class="edu-subtab-btn" data-edutab="edu-tab-webview">
-            🌐 内置网页 / Cookie / HTML 一键导入
-          </button>
-        </div>
-
-        <!-- 子视图 1：账号密码 + 图形验证码直连抓取 -->
-        <div id="edu-tab-login" class="edu-subpanel active">
-          <p class="modal-hint">
-            支持 <strong>新版正方教务 (/jwglxt)</strong>、<strong>强智科技教务 (/jsxsd)</strong>、<strong>旧版正方</strong>、<strong>金智/树维/URP</strong> 等高校教务系统。先填写学校教务处网址并点击「连接并获取验证码」，再输入学号密码一键导入。
-          </p>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="eduSysType">教务系统类型</label>
-              <select id="eduSysType" class="form-select">
-                <option value="auto">🤖 自动识别教务系统 (推荐)</option>
-                <option value="zfnew">新版正方教务系统 (/jwglxt)</option>
-                <option value="qz">强智科技教务系统 (/jsxsd)</option>
-                <option value="zfold">旧版正方教务系统 (default2.aspx)</option>
-                <option value="generic">金智 / 树维 / URP / 其他通用教务</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="eduImportMode">导入策略</label>
-              <select id="eduImportMode" class="form-select">
-                <option value="overwrite">覆盖现有课表 (overwrite)</option>
-                <option value="merge">与现有课表合并 (merge)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="eduLoginUrl">学校教务处登录网址 URL *</label>
-            <div class="input-with-btn">
-              <input
-                type="url"
-                id="eduLoginUrl"
-                class="form-input"
-                placeholder="例如：https://jwxt.xxx.edu.cn/jwglxt/xtgl/login_slogin.html"
-              />
-              <button type="button" class="btn btn-secondary" id="eduConnectBtn">
-                🔗 连接并获取验证码
-              </button>
-            </div>
-            <span class="field-status-hint" id="eduSessionStatus">尚未连接教务处会话</span>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="eduUsername">学号 / 教务账号 *</label>
-              <input type="text" id="eduUsername" class="form-input" placeholder="请输入学号" />
-            </div>
-            <div class="form-group">
-              <label for="eduPassword">教务处密码 *</label>
-              <input type="password" id="eduPassword" class="form-input" placeholder="请输入密码（仅用于本次抓取）" />
-            </div>
-          </div>
-
-          <!-- 图形验证码区域（当检测到验证码或手动开启时显示） -->
-          <div class="form-row-2" id="eduCaptchaRow">
-            <div class="form-group">
-              <label for="eduCaptchaInput">图形验证码（若教务处无验证码可留空）</label>
-              <input type="text" id="eduCaptchaInput" class="form-input" placeholder="请输入右侧验证码" />
-            </div>
-            <div class="form-group">
-              <label>验证码图片（点击图片可刷新）</label>
-              <div class="captcha-box">
-                <img id="eduCaptchaImg" alt="点击上方连接获取验证码" style="display: none;" title="点击刷新验证码" />
-                <span id="eduCaptchaPlaceholder" class="captcha-placeholder">点击「连接并获取验证码」后加载</span>
-                <button type="button" class="btn btn-xs btn-ghost" id="eduRefreshCaptchaBtn" style="display: none;">
-                  ↻ 换一张
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-row-3">
-            <div class="form-group">
-              <label for="eduAcademicYear">学年（起始年份）</label>
-              <input type="number" id="eduAcademicYear" class="form-input" value="2026" min="2020" max="2035" />
-            </div>
-            <div class="form-group">
-              <label for="eduSemesterTerm">学期</label>
-              <select id="eduSemesterTerm" class="form-select">
-                <option value="1">第一学期（秋/上学期）</option>
-                <option value="2">第二学期（春/下学期）</option>
-                <option value="3">第三学期（暑期/短学期）</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="eduCustomScheduleUrl">自定义课表接口地址（选填）</label>
-              <input type="text" id="eduCustomScheduleUrl" class="form-input" placeholder="默认自动推导，特殊系统可填" />
-            </div>
-          </div>
-
-          <div class="modal-footer" style="margin: 6px -18px -16px;">
-            <button type="button" class="btn btn-ghost" data-close="eduModal">取消</button>
-            <button type="button" class="btn btn-primary" id="eduLoginImportBtn">
-              🚀 登录教务处并自动导入课表
-            </button>
-          </div>
-        </div>
-
-        <!-- 子视图 2：内置网页 / Cookie / 网页 HTML / WakeUp 通用一键导入 -->
-        <div id="edu-tab-webview" class="edu-subpanel" style="display: none;">
-          <p class="modal-hint">
-            <strong>适用所有高校（支持统一身份认证/微信扫码/复杂滑块）：</strong><br />
-            方式 A：在下方输入教务处网址打开<strong>内置网页预览</strong>，或点击「在新窗口打开教务处」登录后进入个人课表页；<br />
-            方式 B：在课表页面按 <code>Ctrl+S</code>（或右键“查看框架源代码”全选复制）把课表网页 HTML / 正方 JSON / WakeUp文本粘贴到下方，即可 100% 免验证码一键解析导入！
-          </p>
-
-          <div class="form-group">
-            <label for="eduWebviewUrl">教务处网址 / 个人课表页面 URL</label>
-            <div class="input-with-btn">
-              <input
-                type="url"
-                id="eduWebviewUrl"
-                class="form-input"
-                placeholder="输入教务处网址，如 https://jwxt.xxx.edu.cn"
-              />
-              <button type="button" class="btn btn-outline btn-sm" id="eduLoadIframeBtn">
-                🖥️ 内置网页打开
-              </button>
-              <button type="button" class="btn btn-secondary btn-sm" id="eduOpenExternalBtn">
-                ↗ 新窗口打开登录
-              </button>
-            </div>
-          </div>
-
-          <!-- 内置网页容器（可选展开） -->
-          <div id="eduIframeContainer" class="edu-iframe-wrapper" style="display: none;">
-            <div class="edu-iframe-toolbar">
-              <span>🌐 内置教务网页视图（若学校教务处禁止 iframe 嵌套，请点击右上角「新窗口打开登录」或填写 Cookie 抓取）</span>
-              <button type="button" class="btn btn-xs btn-ghost" id="eduCloseIframeBtn">收起网页</button>
-            </div>
-            <iframe id="eduEmbeddedIframe" class="edu-iframe" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="eduCookieInput">已登录 Cookie（选填，配合上方课表 URL 免密直接抓取）</label>
-              <input
-                type="text"
-                id="eduCookieInput"
-                class="form-input"
-                placeholder="如：JSESSIONID=xxx; route=xxx（在浏览器按 F12 输入 document.cookie 获取）"
-              />
-            </div>
-            <div class="form-group">
-              <label for="eduHtmlImportMode">导入策略</label>
-              <select id="eduHtmlImportMode" class="form-select">
-                <option value="overwrite">覆盖现有课表 (overwrite)</option>
-                <option value="merge">与现有课表合并 (merge)</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <div class="weeks-header-row">
-              <label for="eduRawHtmlTextarea">或者：直接粘贴课表网页 HTML 源码 / 正方 kbList JSON / WakeUp导出文本</label>
-              <button type="button" class="btn btn-xs btn-outline" id="eduPreviewParseBtn">
-                🔍 预解析测试
-              </button>
-            </div>
-            <textarea
-              id="eduRawHtmlTextarea"
-              class="form-textarea"
-              rows="5"
-              placeholder="在教务处打开你的课表页面 -> 右键「查看页面/框架源代码」全选复制粘贴到这里，或者填写上方课表 URL + Cookie 直接抓取..."
-            ></textarea>
-            <div id="eduParsePreviewResult" class="parse-preview-box" style="display: none;"></div>
-          </div>
-
-          <div class="modal-footer" style="margin: 6px -18px -16px;">
-            <button type="button" class="btn btn-ghost" data-close="eduModal">取消</button>
-            <button type="button" class="btn btn-primary" id="eduWebviewImportBtn">
-              📥 一键解析并导入课表
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
