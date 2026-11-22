@@ -7,6 +7,14 @@ from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.api.web import json_response, error_response, request
 
+try:
+    from astrbot.api.agents import TextPart
+except ImportError:
+    try:
+        from astrbot.core.agent.message import TextPart
+    except ImportError:
+        TextPart = None
+
 from .core.models import SemesterConfig
 from .core.storage import ScheduleStorage
 from .core.parser import ScheduleParser
@@ -19,7 +27,7 @@ PLUGIN_NAME = "astrbot_plugin_schedule"
     PLUGIN_NAME,
     "夜玄",
     "智能课表与日程管家：让 AI 自主推算当前教学周与单双周，查询每日课程并记录动态调课/临时日程",
-    "1.9.0",
+    "1.9.1",
     "https://github.com/731342224/astrbot_plugin_schedule",
 )
 class SchedulePlugin(Star):
@@ -157,8 +165,8 @@ class SchedulePlugin(Star):
 
     @filter.on_llm_request()
     async def inject_today_schedule_context(self, event: AstrMessageEvent, req: ProviderRequest):
-        """当开启 auto_inject_today_context 时，在向 LLM 发起请求前自动注入今日课表与日程摘要。"""
-        auto_inject = self.plugin_config.get("auto_inject_today_context", True)
+        """当开启 auto_inject_today_context 时，在向 LLM 发起请求前通过 extra_user_content_parts 临时注入今日课表与日程摘要。"""
+        auto_inject = self.plugin_config.get("auto_inject_today_context", False)
         if not auto_inject:
             return
 
@@ -177,11 +185,23 @@ class SchedulePlugin(Star):
                 reminder_note = "当前已关闭主动课前提醒，仅在用户主动询问课表或日程时回答，无需主动催促上课。"
 
             context_block = (
-                f"\n\n[智能课表与日程管家 - 今日实时上下文]\n"
+                f"<schedule_context>\n"
+                f"[智能课表与日程管家 - 今日实时上下文]\n"
                 f"{today_summary}\n"
-                f"（提示：{reminder_note}若用户询问其他日期的课表或需要记录调课/停课/临时日程，请调用 query_schedule 或 manage_schedule_event 工具。）"
+                f"（提示：{reminder_note}若用户询问其他日期的课表或需要记录调课/停课/临时日程，请调用 query_schedule 或 manage_schedule_event 工具。）\n"
+                f"</schedule_context>"
             )
-            req.system_prompt = (req.system_prompt or "") + context_block
+
+            # 使用 req.extra_user_content_parts + .mark_as_temp() 注入本轮临时上下文，
+            # 避免改写 req.system_prompt 破坏大模型服务端 Prompt 缓存命中率，也不污染长期对话历史
+            if hasattr(req, "extra_user_content_parts") and isinstance(req.extra_user_content_parts, list):
+                if TextPart is not None:
+                    part = TextPart(text=context_block)
+                    if hasattr(part, "mark_as_temp") and callable(part.mark_as_temp):
+                        part.mark_as_temp()
+                    elif hasattr(part, "make_as_temp") and callable(part.make_as_temp):
+                        part.make_as_temp()
+                    req.extra_user_content_parts.append(part)
         except Exception as e:
             logger.debug(f"[{PLUGIN_NAME}] 自动注入今日课表上下文跳过: {e}")
 

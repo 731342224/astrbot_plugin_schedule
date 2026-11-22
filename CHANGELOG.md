@@ -4,6 +4,13 @@
 
 ---
 
+## [v1.9.1] - 2026-11-22
+### ⚡ 性能优化与合规升级（通过官方插件上架审查）
+- **保护大模型 Prompt 缓存命中率**：在 `@filter.on_llm_request()` 中移除对 `req.system_prompt` 的动态改写，改用 `req.extra_user_content_parts.append(TextPart(...).mark_as_temp())` 注入本轮临时课表上下文，既不破坏大模型服务端前缀缓存，也不污染长期对话历史。
+- **默认按需调用工具**：将 `_conf_schema.json` 中的 `auto_inject_today_context` 默认值调整为 `false`（推荐使用 `@llm_tool("query_schedule")` 按需查询，大幅节省日常闲聊 Token 消耗；需要常驻感知时可随时在配置页开启）。
+
+---
+
 ## [v1.9.0] - 2026-11-21
 ### 🧹 精简与重构
 - **移除教务处登录抓取模块，专注于标准文件导入**：

@@ -2,8 +2,8 @@
   "auto_inject_today_context": {
     "description": "自动向 AI 对话上下文注入今日课表与日程摘要",
     "type": "bool",
-    "default": true,
-    "hint": "开启后，机器人始终知道你今天的教学周次、上什么课以及有什么临时日程，你随时问它都能直接回答。"
+    "default": false,
+    "hint": "开启后，通过 extra_user_content_parts 向本轮对话临时附加今日课表（不破坏系统提示词缓存）。关闭时机器人会按需调用 query_schedule 工具查询，平时闲聊更省 Token。"
   },
   "enable_schedule_reminder": {
     "description": "启用课程与日程主动提醒",
