@@ -49,7 +49,6 @@ const state = {
   events: [],
   currentWeek: 1,
   selectedWeek: 1,
-  showInactiveCourses: false,
   eventsSortDesc: true,
   editingPeriodsDraft: {},
   activeProfileId: "default",
@@ -410,16 +409,12 @@ function renderScheduleGrid() {
   const skipMap = {}; // key: `${day}-${period}` -> true
   const slotCoursesMap = {}; // key: `${day}-${period}` -> { span, courses: [] }
 
-  // 过滤出需要展示的课程（当前周生效在前，非当前周在后）
+  // 仅展示当前选中周生效的课程（非本周课程直接不显示）
   const relevantCourses = state.courses.filter((c) => {
-    const isThisWeek = Array.isArray(c.weeks) && c.weeks.map(Number).includes(selWeek);
-    return isThisWeek || state.showInactiveCourses;
+    return Array.isArray(c.weeks) && c.weeks.map(Number).includes(selWeek);
   });
 
   relevantCourses.sort((a, b) => {
-    const aActive = Array.isArray(a.weeks) && a.weeks.map(Number).includes(selWeek) ? 1 : 0;
-    const bActive = Array.isArray(b.weeks) && b.weeks.map(Number).includes(selWeek) ? 1 : 0;
-    if (aActive !== bActive) return bActive - aActive;
     return (a.start_period || 1) - (b.start_period || 1);
   });
 
@@ -1732,11 +1727,6 @@ function bindUIEvents() {
       btn.classList.add("active");
       const targetTab = document.getElementById(btn.dataset.tab);
       if (targetTab) targetTab.classList.add("active");
-
-      const filterBar = document.getElementById("gridFilterBar");
-      if (filterBar) {
-        filterBar.style.display = btn.dataset.tab === "tab-grid" ? "block" : "none";
-      }
     });
   });
 
@@ -1771,12 +1761,6 @@ function bindUIEvents() {
     state.selectedWeek = Math.min(Math.max(1, state.currentWeek), totalW);
     state.slotFocusedCourseId = {};
     document.getElementById("weekSelect").value = String(state.selectedWeek);
-    renderScheduleGrid();
-  });
-
-  // 非本周课程显示开关
-  document.getElementById("showInactiveCoursesToggle").addEventListener("change", (e) => {
-    state.showInactiveCourses = e.target.checked;
     renderScheduleGrid();
   });
 

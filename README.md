@@ -62,6 +62,7 @@ astrbot_plugin_schedule/
 
 ## 📑 最近更新日志（完整历史见 [CHANGELOG.md](./CHANGELOG.md)）
 
+- **v1.9.2**：移除周课表网格右上角的「显示非本周课程」开关，周课表网格始终仅展示当前所选教学周真正要上的课程。
 - **v1.9.1**：将 `@filter.on_llm_request()` 中的动态今日课表注入方式由 `req.system_prompt` 升级为 `req.extra_user_content_parts` + `.mark_as_temp()`（保护大模型服务端 Prompt 缓存命中率，符合官方插件市场上架规范），并将 `auto_inject_today_context` 默认设为按需工具查询模式 (`false`)。
 - **v1.9.0**：移除教务处登录导入模块及相关第三方依赖（`httpx`、`beautifulsoup4`、`pycryptodome`），仅保留干净轻量的 `.ics` / `.json` 文件导入与导出。
 - **v1.8.2**：默认隐藏周课表网格中的非本周课程；新增 `this_week` / `next_week` AI 查询模式；优化单双周与分段周次描述并显式标注 `（本周有课/无课）`，彻底避免 AI 算错周次。
